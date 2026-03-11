@@ -1,10 +1,12 @@
 'use client';
 
-import { useState }     from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter }    from 'next/navigation';
 import Link             from 'next/link';
 import { useCart }      from '@/context/CartContext';
+import { useAuth }      from '@/context/AuthContext';
 import { ordersApi }    from '@/lib/api';
+import ProtectedRoute   from '@/components/ProtectedRoute';
 import { CheckCircle2, ArrowLeft, Loader2, ShoppingBag } from 'lucide-react';
 
 const INITIAL_FORM = {
@@ -17,14 +19,28 @@ const INITIAL_FORM = {
 
 const ERRORS_INIT = {};
 
-export default function CheckoutPage() {
+function CheckoutContent() {
   const router  = useRouter();
   const { items, totalPrice, clearCart } = useCart();
+  const { user, profile } = useAuth();
 
   const [form,      setForm]      = useState(INITIAL_FORM);
   const [errors,    setErrors]    = useState(ERRORS_INIT);
   const [loading,   setLoading]   = useState(false);
   const [apiError,  setApiError]  = useState('');
+
+  // Pre-fill form from user profile
+  useEffect(() => {
+    if (user || profile) {
+      setForm(f => ({
+        ...f,
+        customerName:    profile?.full_name  || user?.user_metadata?.full_name || f.customerName,
+        customerEmail:   user?.email         || f.customerEmail,
+        customerPhone:   profile?.phone      || f.customerPhone,
+        deliveryAddress: profile?.address    || f.deliveryAddress,
+      }));
+    }
+  }, [user, profile]);
   const [orderId,   setOrderId]   = useState(null); // success state
 
   if (items.length === 0 && !orderId) {
@@ -231,5 +247,13 @@ export default function CheckoutPage() {
         </aside>
       </div>
     </div>
+  );
+}
+
+export default function CheckoutPage() {
+  return (
+    <ProtectedRoute>
+      <CheckoutContent />
+    </ProtectedRoute>
   );
 }

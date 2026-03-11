@@ -7,11 +7,12 @@ import Image              from 'next/image';
 import { ordersApi }      from '@/lib/api';
 import OrderStatusBadge   from '@/components/OrderStatusBadge';
 import LoadingSpinner     from '@/components/LoadingSpinner';
+import ProtectedRoute     from '@/components/ProtectedRoute';
 import { ArrowLeft, Phone, Mail, MapPin, Clock, Package } from 'lucide-react';
 
 const STATUS_TIMELINE = ['Pending', 'Confirmed', 'Preparing', 'Ready', 'Delivered'];
 
-export default function OrderDetailPage() {
+function OrderDetailContent() {
   const { orderId } = useParams();
   const router      = useRouter();
 
@@ -230,5 +231,13 @@ export default function OrderDetailPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function OrderDetailPage() {
+  return (
+    <ProtectedRoute>
+      <OrderDetailContent />
+    </ProtectedRoute>
   );
 }

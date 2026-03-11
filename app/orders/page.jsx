@@ -5,11 +5,12 @@ import Link                from 'next/link';
 import { ordersApi }       from '@/lib/api';
 import OrderStatusBadge    from '@/components/OrderStatusBadge';
 import LoadingSpinner      from '@/components/LoadingSpinner';
+import ProtectedRoute      from '@/components/ProtectedRoute';
 import { Search, RefreshCw, ChevronDown, ChevronUp, ClipboardList } from 'lucide-react';
 
 const STATUSES = ['All', 'Pending', 'Confirmed', 'Preparing', 'Ready', 'Delivered', 'Cancelled'];
 
-export default function OrdersPage() {
+function OrdersContent() {
   const [orders,    setOrders]    = useState([]);
   const [loading,   setLoading]   = useState(true);
   const [error,     setError]     = useState(null);
@@ -204,5 +205,13 @@ export default function OrdersPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function OrdersPage() {
+  return (
+    <ProtectedRoute>
+      <OrdersContent />
+    </ProtectedRoute>
   );
 }
