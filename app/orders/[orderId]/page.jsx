@@ -124,10 +124,10 @@ function OrderDetailContent() {
               {order.order_items?.map(item => (
                 <div key={item.id} className="flex items-center gap-3">
                   <div className="relative w-12 h-12 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0">
-                    {item.food_items?.imageUrl ? (
+                    {item.items?.imageUrl ? (
                       <Image
-                        src={item.food_items.imageUrl}
-                        alt={item.food_items.name}
+                        src={item.items.imageUrl}
+                        alt={item.items.name}
                         fill className="object-cover" unoptimized
                       />
                     ) : (
@@ -135,8 +135,8 @@ function OrderDetailContent() {
                     )}
                   </div>
                   <div className="flex-1">
-                    <p className="font-medium text-gray-900 text-sm">{item.food_items?.name}</p>
-                    <p className="text-xs text-gray-400">{item.food_items?.category}</p>
+                    <p className="font-medium text-gray-900 text-sm">{item.items?.name}</p>
+                    <p className="text-xs text-gray-400">{item.items?.category}</p>
                   </div>
                   <div className="text-right">
                     <p className="text-sm font-bold text-gray-900">

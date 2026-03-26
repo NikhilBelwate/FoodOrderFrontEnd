@@ -57,9 +57,60 @@ function Badge({ status }) {
   );
 }
 
+// ─── Payment status helpers ───────────────────────────────────────────────────
+const PAYMENT_STATUS_STYLES = {
+  pending:          'bg-gray-100 text-gray-600',
+  awaiting_payment: 'bg-yellow-100 text-yellow-800',
+  confirmed:        'bg-green-100 text-green-800',
+  failed:           'bg-red-100 text-red-800',
+  refunded:         'bg-purple-100 text-purple-800',
+};
+
+const PAYMENT_STATUS_LABELS = {
+  pending:          'Pending',
+  awaiting_payment: 'Awaiting Payment',
+  confirmed:        'Confirmed ✓',
+  failed:           'Failed',
+  refunded:         'Refunded',
+};
+
 // ─── Order Detail Modal ───────────────────────────────────────────────────────
 function OrderDetailModal({ order, onClose, onStatusChange, statusUpdating }) {
   const [localStatus, setLocalStatus] = useState(order.status);
+  const [paymentAction, setPaymentAction] = useState(null); // 'verifying' | 'refunding' | null
+  const [paymentActionError, setPaymentActionError] = useState('');
+  const [paymentData, setPaymentData] = useState(
+    Array.isArray(order.payments) ? order.payments[0] : order.payments
+  );
+
+  const handleVerifyPayment = async () => {
+    if (!paymentData?.id) return;
+    setPaymentAction('verifying');
+    setPaymentActionError('');
+    try {
+      const res = await adminApi.put(`/payments/admin/${paymentData.id}/verify`, {});
+      setPaymentData(res.data?.data || { ...paymentData, payment_status: 'confirmed', paid_at: new Date().toISOString() });
+    } catch (err) {
+      setPaymentActionError(err.message || 'Verification failed');
+    } finally {
+      setPaymentAction(null);
+    }
+  };
+
+  const handleRefundPayment = async () => {
+    if (!paymentData?.id) return;
+    if (!window.confirm('Mark this payment as refunded?')) return;
+    setPaymentAction('refunding');
+    setPaymentActionError('');
+    try {
+      const res = await adminApi.put(`/payments/admin/${paymentData.id}/refund`, {});
+      setPaymentData(res.data?.data || { ...paymentData, payment_status: 'refunded' });
+    } catch (err) {
+      setPaymentActionError(err.message || 'Refund failed');
+    } finally {
+      setPaymentAction(null);
+    }
+  };
 
   const items       = order.order_items || [];
   const address     = order['deliveryAddress'] || '';
@@ -163,7 +214,7 @@ function OrderDetailModal({ order, onClose, onStatusChange, statusUpdating }) {
                   {items.map((item, idx) => {
                     const unitPrice  = parseFloat(item.price || 0);
                     const subtotal   = unitPrice * (item.quantity || 1);
-                    const foodInfo   = item.food_items || {};
+                    const foodInfo   = item.items || {};
                     const discountPct = foodInfo.discount_percent || 0;
                     const offerLabel  = foodInfo.offer_label || null;
                     return (
@@ -194,6 +245,92 @@ function OrderDetailModal({ order, onClose, onStatusChange, statusUpdating }) {
               </div>
             </div>
           </section>
+
+          {/* ── Payment ── */}
+          {paymentData ? (
+            <section>
+              <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Payment</h3>
+              <div className="bg-gray-50 rounded-xl p-4 space-y-3">
+
+                {/* Method + status row */}
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs text-gray-400 mb-1">Method</p>
+                    <p className="font-semibold text-gray-800">
+                      {paymentData.payment_method === 'stripe'
+                        ? '💳 Card (Stripe)'
+                        : '🚚 Pay on Delivery'}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs text-gray-400 mb-1">Status</p>
+                    <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold
+                      ${PAYMENT_STATUS_STYLES[paymentData.payment_status] || 'bg-gray-100 text-gray-600'}`}>
+                      {PAYMENT_STATUS_LABELS[paymentData.payment_status] || paymentData.payment_status}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Amount */}
+                <div className="flex justify-between items-center pt-1 border-t border-gray-200">
+                  <p className="text-xs text-gray-400">Amount</p>
+                  <p className="font-bold text-gray-800">
+                    {paymentData.currency} {parseFloat(paymentData.amount || 0).toFixed(2)}
+                  </p>
+                </div>
+
+                {/* Stripe-specific fields */}
+                {paymentData.payment_method === 'stripe' && (
+                  <>
+                    {paymentData.stripe_payment_intent_id && (
+                      <div className="flex justify-between items-center pt-1 border-t border-gray-200">
+                        <p className="text-xs text-gray-400">Payment Intent</p>
+                        <p className="font-mono text-xs text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded truncate max-w-[55%]">
+                          {paymentData.stripe_payment_intent_id}
+                        </p>
+                      </div>
+                    )}
+                    {paymentData.paid_at && (
+                      <div className="flex justify-between items-center pt-1 border-t border-gray-200">
+                        <p className="text-xs text-gray-400">Paid at</p>
+                        <p className="text-sm text-gray-700">
+                          {new Date(paymentData.paid_at).toLocaleString('en-US', {
+                            month: 'short', day: 'numeric', year: 'numeric',
+                            hour: '2-digit', minute: '2-digit',
+                          })}
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Admin actions */}
+                    {paymentActionError && (
+                      <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded p-2">
+                        ⚠️ {paymentActionError}
+                      </div>
+                    )}
+                    <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-200">
+                      {!['confirmed', 'refunded'].includes(paymentData.payment_status) && (
+                        <button
+                          onClick={handleVerifyPayment}
+                          disabled={paymentAction !== null}
+                          className="flex-1 px-3 py-1.5 bg-green-500 hover:bg-green-600 text-white text-xs font-semibold rounded-lg transition-colors disabled:opacity-50">
+                          {paymentAction === 'verifying' ? 'Verifying…' : '✓ Verify Payment'}
+                        </button>
+                      )}
+                      {paymentData.payment_status !== 'refunded' && (
+                        <button
+                          onClick={handleRefundPayment}
+                          disabled={paymentAction !== null}
+                          className="flex-1 px-3 py-1.5 bg-red-100 hover:bg-red-200 text-red-700 text-xs font-semibold rounded-lg transition-colors disabled:opacity-50">
+                          {paymentAction === 'refunding' ? 'Processing…' : '↩ Mark Refunded'}
+                        </button>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            </section>
+          ) : null}
 
           {/* ── Update status ── */}
           <section>
@@ -646,7 +783,7 @@ export default function AdminDashboardPage() {
       const params = {};
       if (itemCategory) params.category = itemCategory;
       if (itemSearch)   params.search   = itemSearch;
-      const { data } = await adminApi.get('/food-items/admin', { params });
+      const { data } = await adminApi.get('/items/admin', { params });
       setItems(data.data || []);
     } catch (err) {
       showToast('error', 'Failed to load items: ' + err.message);
@@ -716,10 +853,10 @@ export default function AdminDashboardPage() {
     setFormLoading(true);
     try {
       if (editItem?.id) {
-        await adminApi.put(`/food-items/${editItem.id}`, formData);
+        await adminApi.put(`/items/${editItem.id}`, formData);
         showToast('success', `"${formData.name}" updated.`);
       } else {
-        await adminApi.post('/food-items', formData);
+        await adminApi.post('/items', formData);
         showToast('success', `"${formData.name}" created.`);
       }
       setShowItemForm(false);
@@ -734,7 +871,7 @@ export default function AdminDashboardPage() {
 
   const handleDeleteItem = async (id) => {
     try {
-      await adminApi.delete(`/food-items/${id}`);
+      await adminApi.delete(`/items/${id}`);
       showToast('success', 'Item deleted.');
       setDeleteConfirm(null);
       fetchItems();
@@ -745,7 +882,7 @@ export default function AdminDashboardPage() {
 
   const handleToggle = async (item) => {
     try {
-      const { data } = await adminApi.patch(`/food-items/${item.id}/toggle`);
+      const { data } = await adminApi.patch(`/items/${item.id}/toggle`);
       showToast('success', data.message);
       fetchItems();
     } catch (err) {
@@ -756,7 +893,7 @@ export default function AdminDashboardPage() {
   const handleSaveOffer = async (offerData) => {
     setFormLoading(true);
     try {
-      await adminApi.patch(`/food-items/${offerItem.id}/offer`, offerData);
+      await adminApi.patch(`/items/${offerItem.id}/offer`, offerData);
       showToast('success', 'Offer applied.');
       setShowOfferForm(false);
       setOfferItem(null);
@@ -771,7 +908,7 @@ export default function AdminDashboardPage() {
   const handleSavePrice = async (priceData) => {
     setFormLoading(true);
     try {
-      await adminApi.patch(`/food-items/${priceItem.id}/price`, priceData);
+      await adminApi.patch(`/items/${priceItem.id}/price`, priceData);
       showToast('success', 'Price updated.');
       setShowPriceForm(false);
       setPriceItem(null);
@@ -786,7 +923,7 @@ export default function AdminDashboardPage() {
   const handleBulkPrice = async (bulkData) => {
     setFormLoading(true);
     try {
-      const { data } = await adminApi.post('/food-items/bulk-price', bulkData);
+      const { data } = await adminApi.post('/items/bulk-price', bulkData);
       showToast('success', data.message);
       setShowBulk(false);
       fetchItems();

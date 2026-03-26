@@ -6,9 +6,53 @@ import { ordersApi }       from '@/lib/api';
 import OrderStatusBadge    from '@/components/OrderStatusBadge';
 import LoadingSpinner      from '@/components/LoadingSpinner';
 import ProtectedRoute      from '@/components/ProtectedRoute';
-import { Search, RefreshCw, ChevronDown, ChevronUp, ClipboardList } from 'lucide-react';
+import { Search, RefreshCw, ChevronDown, ChevronUp, ClipboardList, CreditCard, Truck } from 'lucide-react';
 
 const STATUSES = ['All', 'Pending', 'Confirmed', 'Preparing', 'Ready', 'Delivered', 'Cancelled'];
+
+// Payment status color map
+const PAYMENT_STATUS_STYLES = {
+  pending:          'bg-gray-100 text-gray-600',
+  awaiting_payment: 'bg-yellow-100 text-yellow-800',
+  confirmed:        'bg-green-100 text-green-800',
+  failed:           'bg-red-100 text-red-800',
+  refunded:         'bg-purple-100 text-purple-800',
+};
+
+const PAYMENT_STATUS_LABELS = {
+  pending:          'Pending',
+  awaiting_payment: 'Awaiting Payment',
+  confirmed:        'Payment Confirmed',
+  failed:           'Payment Failed',
+  refunded:         'Refunded',
+};
+
+function PaymentBadges({ payments }) {
+  // Supabase returns payments as array from nested select
+  const payment = Array.isArray(payments) ? payments[0] : payments;
+  if (!payment) return null;
+
+  const isStripe    = payment.payment_method === 'stripe';
+  const statusStyle = PAYMENT_STATUS_STYLES[payment.payment_status] || 'bg-gray-100 text-gray-600';
+  const statusLabel = PAYMENT_STATUS_LABELS[payment.payment_status] || payment.payment_status;
+
+  return (
+    <div className="flex flex-wrap items-center gap-1.5 mt-1">
+      {/* Method badge */}
+      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium
+        ${isStripe ? 'bg-indigo-50 text-indigo-700' : 'bg-gray-100 text-gray-600'}`}>
+        {isStripe
+          ? <><CreditCard className="w-3 h-3" /> Card (Stripe)</>
+          : <><Truck className="w-3 h-3" /> Pay on Delivery</>
+        }
+      </span>
+      {/* Status badge */}
+      <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${statusStyle}`}>
+        {statusLabel}
+      </span>
+    </div>
+  );
+}
 
 function OrdersContent() {
   const [orders,    setOrders]    = useState([]);
@@ -130,6 +174,7 @@ function OrdersContent() {
                     <OrderStatusBadge status={order.status} />
                   </div>
                   <p className="text-sm text-gray-600">{order.customerName} · {order.customerEmail}</p>
+                  <PaymentBadges payments={order.payments} />
                   <p className="text-xs text-gray-400 mt-0.5">{formatDate(order.createdAt)}</p>
                 </div>
                 <div className="flex items-center gap-4">
@@ -156,7 +201,7 @@ function OrdersContent() {
                     {order.order_items.map(item => (
                       <li key={item.id} className="flex justify-between text-sm">
                         <span className="text-gray-700">
-                          {item.food_items?.name || `Item ${item.foodItemId.slice(0,8)}`}
+                          {item.items?.name || `Item ${item.itemId.slice(0,8)}`}
                           <span className="text-gray-400 ml-1">×{item.quantity}</span>
                         </span>
                         <span className="font-medium">

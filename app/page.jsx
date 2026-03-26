@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { foodItemsApi, categoriesApi } from '@/lib/api';
+import { itemsApi, categoriesApi } from '@/lib/api';
 import FoodCard       from '@/components/FoodCard';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import { Search, SlidersHorizontal } from 'lucide-react';
@@ -50,7 +50,7 @@ export default function HomePage() {
         setError(null);
         const [catRes, itemRes] = await Promise.all([
           categoriesApi.getAll(),
-          foodItemsApi.getAll(),
+          itemsApi.getAll(),
         ]);
         setCategories(catRes.data || []);
         setItems(itemRes.data || []);

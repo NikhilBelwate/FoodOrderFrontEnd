@@ -1,4 +1,5 @@
 import './globals.css';
+import Script from 'next/script';
 import { CartProvider }  from '@/context/CartContext';
 import { AuthProvider }  from '@/context/AuthContext';
 import Navbar  from '@/components/Navbar';
@@ -19,6 +20,8 @@ export default function RootLayout({ children }) {
         />
       </head>
       <body className="min-h-screen flex flex-col">
+        {/* Stripe.js loaded globally — required by checkout page */}
+        <Script src="https://js.stripe.com/v3/" strategy="afterInteractive" />
         <AuthProvider>
           <CartProvider>
             <Navbar />
