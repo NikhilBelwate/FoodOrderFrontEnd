@@ -784,7 +784,8 @@ export default function AdminDashboardPage() {
       if (itemCategory) params.category = itemCategory;
       if (itemSearch)   params.search   = itemSearch;
       const { data } = await adminApi.get('/items/admin', { params });
-      setItems(data.data || []);
+      
+      setItems(data.data? data.data.filter(i => allowedSet.has(i.category)) : []);
     } catch (err) {
       showToast('error', 'Failed to load items: ' + err.message);
     } finally {
@@ -807,15 +808,15 @@ export default function AdminDashboardPage() {
       setOrdersLoading(false);
     }
   }, [orderPage, orderStatusFilter, orderSearch]);
-
+  const allowedEnv = process.env.NEXT_PUBLIC_ALLOWED_CATEGORIES;
+  const allowedSet = allowedEnv
+      ? new Set(allowedEnv.split(',').map(s => s.trim()).filter(Boolean))
+      : [];
   const fetchAdminCategories = useCallback(async () => {
     setCategoriesLoading(true);
     try {
       const { data } = await adminApi.get('/categories/all');
-      const allowedEnv = process.env.NEXT_PUBLIC_ALLOWED_CATEGORIES;
-      const allowedSet = allowedEnv
-          ? new Set(allowedEnv.split(',').map(s => s.trim()).filter(Boolean))
-          : [];
+      
       setAdminCategories(allowedSet ? data.data.filter(c => allowedSet.has(c.name)) : []);
     } catch (err) {
       showToast('error', 'Failed to load categories: ' + err.message);
