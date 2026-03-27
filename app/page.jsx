@@ -52,8 +52,15 @@ export default function HomePage() {
           categoriesApi.getAll(),
           itemsApi.getAll(),
         ]);
-        setCategories(catRes.data || []);
-        setItems(itemRes.data || []);
+        const allowedEnv = process.env.NEXT_PUBLIC_ALLOWED_CATEGORIES;
+        const allowedSet = allowedEnv
+          ? new Set(allowedEnv.split(',').map(s => s.trim()).filter(Boolean))
+          : null;
+
+        const fetchedCats = catRes.data || [];
+        const fetchedItems = itemRes.data || [];
+        setCategories(allowedSet ? fetchedCats.filter(c => allowedSet.has(c.name)) : fetchedCats);
+        setItems(allowedSet ? fetchedItems.filter(i => allowedSet.has(i.category)) : fetchedItems);
       } catch (err) {
         setError(err.message);
       } finally {

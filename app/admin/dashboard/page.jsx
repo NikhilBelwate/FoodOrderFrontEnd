@@ -812,7 +812,11 @@ export default function AdminDashboardPage() {
     setCategoriesLoading(true);
     try {
       const { data } = await adminApi.get('/categories/all');
-      setAdminCategories(data.data || []);
+      const allowedEnv = process.env.NEXT_PUBLIC_ALLOWED_CATEGORIES;
+      const allowedSet = allowedEnv
+          ? new Set(allowedEnv.split(',').map(s => s.trim()).filter(Boolean))
+          : [];
+      setAdminCategories(allowedSet ? data.data.filter(c => allowedSet.has(c.name)) : []);
     } catch (err) {
       showToast('error', 'Failed to load categories: ' + err.message);
     } finally {
