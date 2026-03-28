@@ -13,14 +13,37 @@ export function AuthProvider({ children }) {
 
   const supabase = getSupabaseClient();
 
-  // ── Fetch profile from DB ────────────────────────────────────────
+  // ── Fetch profile from DB (auto-create if missing) ──────────────
   const fetchProfile = useCallback(async (userId) => {
     if (!userId) { setProfile(null); return; }
-    const { data } = await supabase
+
+    // 1. Try to read existing profile
+    let { data } = await supabase
       .from('profiles')
       .select('*')
       .eq('id', userId)
       .single();
+
+    // 2. If no row yet (trigger hasn't fired, or Google OAuth edge case),
+    //    create one on the fly with app_name = 'FoodApp'.
+    if (!data) {
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      const meta = currentUser?.user_metadata || {};
+
+      const { data: newProfile } = await supabase
+        .from('profiles')
+        .upsert({
+          id:         userId,
+          full_name:  meta.full_name || meta.name || '',
+          avatar_url: meta.avatar_url || meta.picture || '',
+          app_name:   'FoodApp',
+        }, { onConflict: 'id' })
+        .select()
+        .single();
+
+      data = newProfile;
+    }
+
     setProfile(data || null);
   }, [supabase]);
 
@@ -51,11 +74,44 @@ export function AuthProvider({ children }) {
 
   // ── Auth actions ─────────────────────────────────────────────────
   const signUpWithEmail = useCallback(async (email, password, fullName) => {
+    // Sign up user (email verification disabled on most Supabase projects,
+    // or requires confirmation depending on settings)
+    // Store redirect path for after email confirmation (if enabled)
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem('auth_redirect', '/');
+    }
+
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      options: { data: { full_name: fullName } },
+      options: {
+        data: { full_name: fullName, app_name: 'FoodApp' },
+        emailRedirectTo: `${typeof window !== 'undefined' ? window.location.origin : ''}/auth/callback`,
+      },
     });
+
+    if (error) return { data, error };
+
+    // Immediately create/upsert profile row after signup succeeds.
+    // This ensures profile exists even if trigger hasn't fired yet.
+    if (data?.user?.id) {
+      try {
+        await supabase
+          .from('profiles')
+          .upsert({
+            id:         data.user.id,
+            full_name:  fullName || '',
+            avatar_url: '',
+            app_name:   'FoodApp',
+          }, { onConflict: 'id' })
+          .select()
+          .single();
+      } catch (profileErr) {
+        // Log but don't fail signup if profile creation fails
+        console.warn('Profile creation after signup failed:', profileErr);
+      }
+    }
+
     return { data, error };
   }, [supabase]);
 
@@ -65,10 +121,15 @@ export function AuthProvider({ children }) {
   }, [supabase]);
 
   const signInWithGoogle = useCallback(async () => {
+    // Store current page so we can redirect back after OAuth completes
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem('auth_redirect', window.location.pathname || '/');
+    }
+
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
+        redirectTo: `${typeof window !== 'undefined' ? window.location.origin : ''}/auth/callback`,
       },
     });
     return { data, error };
